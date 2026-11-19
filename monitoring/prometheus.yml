@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 10s
+      evaluation_interval: 10s
+
+    rule_files:
+      - /etc/prometheus/rules.yml
+
+    scrape_configs:
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
+
+      - job_name: "shipops-api"
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["shipops-api.shipops.svc.cluster.local:80"]
+
+      - job_name: "argocd-application-controller"
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["argocd-metrics.argocd.svc.cluster.local:8082"]
+
+      - job_name: "argocd-server"
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["argocd-server-metrics.argocd.svc.cluster.local:8083"]
+
+  rules.yml: |
+    groups:
+      - name: shipops-availability
+        rules:
+          - alert: ShipOpsApiDown
+            expr: up{job="shipops-api"} == 0
+            for: 30s
+            labels:
+              severity: critical
+              service: shipops-api
+            annotations:
+              summary: "ShipOps API target is down"
+              description: "Prometheus cannot scrape shipops-api for more than 30 seconds."
+
+          - alert: ShipOpsHighMemoryUsage
+            expr: process_resident_memory_bytes{job="shipops-api"} > 200 * 1024 * 1024
+            for: 1m
+            labels:
+              severity: warning
+              service: shipops-api
+            annotations:
+              summary: "High memory usage on ShipOps API"
+              description: "ShipOps API resident memory exceeded 200MiB."
+
+      - name: gitops-health
+        rules:
+          - alert: ArgoCDMetricsDown
+            expr: up{job=~"argocd-.*"} == 0
+            for: 1m
+            labels:
+              severity: warning
+              service: argocd
+            annotations:
+              summary: "Argo CD metrics endpoint unreachable"
+              description: "Target {{ $labels.job }} has been down for more than 1 minute."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.54.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090

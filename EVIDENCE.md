@@ -189,3 +189,35 @@ postgres-57c8f85b7-p9mt2      1/1     Running   0          52m
 shipops-api-d7789b9b5-2glrq   1/1     Running   0          23s
 shipops-api-d7789b9b5-ptw25   1/1     Running   0          17s
 ```
+
+---
+
+## Milestone 4: Observability & Alerting (Prometheus)
+
+### 1. Prometheus Deployment (`monitoring` Namespace)
+- Pre-loaded `prom/prometheus:v2.54.1` into `kind` (`kind load docker-image`) with `imagePullPolicy: IfNotPresent` to avoid host proxy pull issues.
+- Configured `monitoring/prometheus.yml` with 4 scrape targets and 2 alerting rule groups (`rules.yml`, `evaluation_interval: 10s`).
+
+Command:
+```bash
+kubectl get pods,svc -n monitoring
+```
+Verified output:
+```text
+NAME                              READY   STATUS    RESTARTS   AGE
+pod/prometheus-7d94c9cbbc-jsz6n   1/1     Running   0          109s
+
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/prometheus   ClusterIP   10.96.234.107   <none>        9090/TCP   109s
+```
+
+### 2. Verified Targets, Rules & Alerts (Prometheus UI)
+- **Targets (`http://localhost:9090/targets`) — 4/4 UP:**
+  - `shipops-api` (`http://shipops-api.shipops.svc.cluster.local:80/metrics`) — `UP`
+  - `argocd-application-controller` (`http://argocd-metrics.argocd.svc.cluster.local:8082/metrics`) — `UP`
+  - `argocd-server` (`http://argocd-server-metrics.argocd.svc.cluster.local:8083/metrics`) — `UP`
+  - `prometheus` (`http://localhost:9090/metrics`) — `UP`
+- **Rules (`http://localhost:9090/rules`) — All `OK` (10s interval):**
+  - `shipops-availability`: `ShipOpsApiDown` (`critical`), `ShipOpsHighMemoryUsage` (`warning`)
+  - `gitops-health`: `ArgoCDMetricsDown` (`warning`)
+- **Alerts (`http://localhost:9090/alerts`):** `Inactive (3)`, `Pending (0)`, `Firing (0)`.
