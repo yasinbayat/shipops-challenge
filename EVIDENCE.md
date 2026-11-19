@@ -311,3 +311,25 @@ pod/shipops-api-d7789b9b5-rkbbw    0/1     Running   0          6s
 NAME                          READY   STATUS    RESTARTS   AGE
 prometheus-78584686d6-8rw82   1/1     Running   0          29s
 ```
+
+---
+
+## Submission Links & Chronological Commit History
+
+### Repository, CI/CD & Registry Links
+- **Public Repository:** https://github.com/yasinbayat/shipops-challenge
+- **GitHub Actions Runs:** https://github.com/yasinbayat/shipops-challenge/actions
+- **Published GHCR Image:** `ghcr.io/yasinbayat/shipops-api:7556485`
+
+### Chronological List of Major Pushed Commits
+- `7556485` — `fix(ci): run pytest inside Docker image instead of host Python 3.14`
+- `f616c7c` — `chore(gitops): update image tag to 7556485 [skip ci]` (automated CI tag bump)
+- `7be9b00` — `docs(evidence): record containerized pytest fix and successful GHCR CI run #2`
+- `55d743d` — `feat(gitops): add Argo CD Application manifest and detailed Phase 3 troubleshooting evidence`
+- `322f77d` — `feat(monitoring): add Prometheus deployment, Argo CD & API targets, alert rules, and Phase 4 evidence`
+- `607ece8` — `docs: add comprehensive README for final submission`
+- `650dfe1` — `Revert "chore(gitops): update image tag to 7556485 [skip ci]"` (tested GitOps rollback to `local`)
+- `69dd314` — `docs(evidence): record live metrics, zero-downtime pod termination, and GitOps rollback`
+- `8b2f711` — `Reapply "chore(gitops): update image tag to 7556485 [skip ci]"` (roll-forward to `7556485`)
+- `e5fb00a` — `chore(k8s): add PDB, harden Prometheus manifests, and add bootstrap script`
+- `08d9754` — `docs(evidence): record roll-forward, PDB, hardened Prometheus, and bootstrap script`
