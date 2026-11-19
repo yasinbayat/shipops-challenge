@@ -221,3 +221,57 @@ service/prometheus   ClusterIP   10.96.234.107   <none>        9090/TCP   109s
   - `shipops-availability`: `ShipOpsApiDown` (`critical`), `ShipOpsHighMemoryUsage` (`warning`)
   - `gitops-health`: `ArgoCDMetricsDown` (`warning`)
 - **Alerts (`http://localhost:9090/alerts`):** `Inactive (3)`, `Pending (0)`, `Firing (0)`.
+
+---
+
+## Milestone 5: Live Metrics, Reliability (Zero-Downtime) & GitOps Rollback
+
+### 1. Live Application Metrics (Success, Failure & Latency)
+Generated both successful (`200`) and failed (`404`) requests against `shipops-api`:
+```text
+GET /healthz -> 200
+GET /readyz -> 200
+GET /items/1 -> 200
+GET /items/99999 -> 404
+GET /items/88888 -> 404
+```
+Verified live `/metrics` output showing request counts, failed request counts, and latency histogram:
+```text
+http_requests_total{endpoint="/items/1",method="GET",status="200"} 2.0
+http_requests_total{endpoint="/items/99999",method="GET",status="404"} 1.0
+http_requests_total{endpoint="/items/88888",method="GET",status="404"} 1.0
+http_requests_failed_total{endpoint="/items/99999",method="GET",status="404"} 1.0
+http_requests_failed_total{endpoint="/items/88888",method="GET",status="404"} 1.0
+# HELP http_request_duration_seconds HTTP request latency
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{endpoint="/healthz",le="0.005",method="GET"} 192.0
+http_request_duration_seconds_bucket{endpoint="/healthz",le="0.01",method="GET"} 198.0
+```
+
+### 2. Reliability Test: Pod Termination During Active Requests
+- **Observation on `kubectl port-forward`:** Terminating pod `shipops-api-d7789b9b5-2glrq` while using `kubectl port-forward svc/shipops-api` dropped the local tunnel (`Exit 1` / `HTTP 000`) because `port-forward` binds to a single backing pod rather than load-balancing across endpoints.
+- **In-Cluster Service Verification:** Re-tested by sending continuous requests directly to `http://shipops-api.shipops.svc.cluster.local/items/1` while deleting 1 of the 2 replicas (`shipops-api-d7789b9b5-ptw25`):
+```text
+pod "shipops-api-d7789b9b5-ptw25" deleted from shipops namespace
+In-cluster Request #1 -> HTTP 200 | {"id":1,"name":"shipops-persistent-item"}
+In-cluster Request #2 -> HTTP 200 | {"id":1,"name":"shipops-persistent-item"}
+In-cluster Request #3 -> HTTP 200 | {"id":1,"name":"shipops-persistent-item"}
+In-cluster Request #4 -> HTTP 200 | {"id":1,"name":"shipops-persistent-item"}
+In-cluster Request #5 -> HTTP 200 | {"id":1,"name":"shipops-persistent-item"}
+deployment "shipops-api" successfully rolled out
+```
+- All 5 requests succeeded with `HTTP 200` (zero downtime) while the Deployment automatically scheduled replacement pod `shipops-api-d7789b9b5-46bnx` (`1/1 Running` in 6s).
+
+### 3. Tested GitOps Rollback & Data Preservation
+- **Procedure:** Reverted the GHCR tag bump commit (`f616c7c`) via `git revert --no-edit f616c7c` (commit `650dfe1`) and pushed to `main`—no manual `kubectl set image` used.
+- **Argo CD Sync Result:**
+```text
+NAME          SYNC STATUS   HEALTH STATUS
+shipops-api   Synced        Healthy
+```
+- **Verified Rollback & Database Persistence:**
+```text
+VERSION: {"version":"local"}
+ITEM 1 : {"id":1,"name":"shipops-persistent-item"}
+```
+- **Schema Limitation Note:** This GitOps rollback restores the application image cleanly as long as database changes remain backward-compatible (expand-and-contract pattern). If a newer release applies a destructive/incompatible schema migration (e.g., dropping or renaming a column), rolling back only the application image will fail against the modified schema and requires a paired database backup/restore or forward-fix migration.
