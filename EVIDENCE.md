@@ -275,3 +275,39 @@ VERSION: {"version":"local"}
 ITEM 1 : {"id":1,"name":"shipops-persistent-item"}
 ```
 - **Schema Limitation Note:** This GitOps rollback restores the application image cleanly as long as database changes remain backward-compatible (expand-and-contract pattern). If a newer release applies a destructive/incompatible schema migration (e.g., dropping or renaming a column), rolling back only the application image will fail against the modified schema and requires a paired database backup/restore or forward-fix migration.
+
+---
+
+## Milestone 6: Roll-Forward, Manifest Hardening & Bootstrap Script
+
+### 1. Roll-Forward to GHCR Release (`7556485`)
+- Reverted the rollback commit (`650dfe1`) via `git revert --no-edit 650dfe1` (commit `8b2f711`) so Argo CD automatically rolled `shipops-api` forward back to `ghcr.io/yasinbayat/shipops-api:7556485`.
+
+### 2. High Availability (`PodDisruptionBudget`), Prometheus Hardening & Bootstrap
+- Added `charts/shipops-api/templates/pdb.yaml` (`minAvailable: 1`) to protect the 2-replica API during disruptions.
+- Hardened `monitoring/prometheus.yml` with non-root `securityContext` (`runAsNonRoot: true`, UID `65534`, `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`), CPU/memory requests & limits, and `/-/ready` + `/-/healthy` probes.
+- Added repeatable cluster bootstrap script `scripts/bootstrap.sh` (commit `e5fb00a`).
+
+Commands:
+```bash
+kubectl get applications -n argocd
+kubectl get pdb,pods -n shipops
+kubectl get pods -n monitoring
+```
+Verified output:
+```text
+NAME          SYNC STATUS   HEALTH STATUS
+shipops-api   Synced        Progressing
+
+NAME                                         MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+poddisruptionbudget.policy/shipops-api-pdb   1               N/A               1                     6s
+
+NAME                               READY   STATUS    RESTARTS   AGE
+pod/postgres-57c8f85b7-p9mt2       1/1     Running   0          90m
+pod/shipops-api-7f8c79dc5b-55vrg   1/1     Running   0          3m35s
+pod/shipops-api-7f8c79dc5b-th979   1/1     Running   0          3m40s
+pod/shipops-api-d7789b9b5-rkbbw    0/1     Running   0          6s
+
+NAME                          READY   STATUS    RESTARTS   AGE
+prometheus-78584686d6-8rw82   1/1     Running   0          29s
+```
