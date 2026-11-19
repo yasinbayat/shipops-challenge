@@ -122,3 +122,12 @@ ERROR: Failed building wheel for psycopg2-binary
 ```
 - **Root Cause:** The `ubuntu-latest` runner defaulted to Python 3.14, for which `psycopg2-binary==2.9.9` has no pre-built wheel and fails to compile.
 - **Resolution:** Added `actions/setup-python@v5` pinned to Python `3.12` in `.github/workflows/ci-cd.yml` to match the `python:3.12-slim` Docker runtime.
+
+### 3. Containerized CI Tests & Verified Successful Pipeline Run (#2)
+To eliminate host Python version drift completely, the workflow was updated to build the `python:3.12-slim` Docker image first and run `pytest -v` inside the container before pushing to GHCR.
+- **Workflow Run:** `Build, Test, Publish & Update GitOps #2` — **Succeeded in 23s**
+  - Build Docker image and run automated tests (`pytest`): Passed (12s)
+  - Push tested Docker image to GHCR: Passed (4s)
+  - Update Helm `values.yaml` & commit/push with `[skip ci]`: Passed (2s)
+- **Published GHCR Image:** `ghcr.io/yasinbayat/shipops-api:7556485`
+- **Automated GitOps Commit:** `f616c7c chore(gitops): update image tag to 7556485 [skip ci]`
