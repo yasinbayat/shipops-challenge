@@ -101,3 +101,15 @@ Verified outputs:
 - **`GET /items/1` (before DB restart):** `{"id":1,"name":"shipops-persistent-item"}`
 - **DB Restart:** `deployment.apps/postgres restarted` -> `deployment "postgres" successfully rolled out`
 - **`GET /items/1` (after DB restart):** `{"id":1,"name":"shipops-persistent-item"}`
+
+---
+
+## Milestone 3: CI/CD (GitHub Actions, GHCR) & GitOps (Argo CD)
+
+### 1. Workflow Push Error & Resolution (PAT Permissions)
+When pushing `.github/workflows/ci-cd.yml` for the first time, GitHub rejected the push:
+```text
+! [remote rejected] main -> main (refusing to allow a Personal Access Token to create or update workflow `.github/workflows/ci-cd.yml` without `workflow` scope)
+```
+- **Root Cause:** The repository-scoped fine-grained PAT created during setup had `Contents: Read and write` permission, which is insufficient for creating or modifying GitHub Actions workflow files.
+- **Resolution:** Updated the fine-grained PAT in GitHub (`Settings -> Developer settings -> Personal access tokens`) to add `Workflows: Read and write` permission (maintaining least-privilege repository scoping), then pushed successfully.
