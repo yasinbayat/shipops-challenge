@@ -1,0 +1,55 @@
+name: Build, Test, Publish & Update GitOps
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image and run automated tests (pytest)
+        run: |
+          docker build -t ghcr.io/yasinbayat/shipops-api:${{ steps.vars.outputs.sha_short }} ./app
+          docker run --rm ghcr.io/yasinbayat/shipops-api:${{ steps.vars.outputs.sha_short }} pytest -v
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push tested Docker image to GHCR
+        run: docker push ghcr.io/yasinbayat/shipops-api:${{ steps.vars.outputs.sha_short }}
+
+      - name: Update Helm values with new immutable image tag
+        run: |
+          sed -i 's|repository: .*|repository: ghcr.io/yasinbayat/shipops-api|' charts/shipops-api/values.yaml
+          sed -i 's|tag: .*|tag: "${{ steps.vars.outputs.sha_short }}"|' charts/shipops-api/values.yaml
+          sed -i 's|appVersion: .*|appVersion: "${{ steps.vars.outputs.sha_short }}"|' charts/shipops-api/values.yaml
+          sed -i 's|pullPolicy: .*|pullPolicy: IfNotPresent|' charts/shipops-api/values.yaml
+
+      - name: Commit and push updated Helm values
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add charts/shipops-api/values.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(gitops): update image tag to ${{ steps.vars.outputs.sha_short }} [skip ci]"
+            git push origin main
+          fi
