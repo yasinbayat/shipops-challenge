@@ -1,11 +1,11 @@
 replicaCount: 2
 
 image:
-  repository: ghcr.io/yasinbayat/shipops-api
-  tag: "7556485"
+  repository: shipops-api
+  tag: "local"
   pullPolicy: IfNotPresent
 
-appVersion: "7556485"
+appVersion: "local"
 
 service:
   type: ClusterIP
