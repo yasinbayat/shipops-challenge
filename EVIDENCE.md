@@ -113,3 +113,12 @@ When pushing `.github/workflows/ci-cd.yml` for the first time, GitHub rejected t
 ```
 - **Root Cause:** The repository-scoped fine-grained PAT created during setup had `Contents: Read and write` permission, which is insufficient for creating or modifying GitHub Actions workflow files.
 - **Resolution:** Updated the fine-grained PAT in GitHub (`Settings -> Developer settings -> Personal access tokens`) to add `Workflows: Read and write` permission (maintaining least-privilege repository scoping), then pushed successfully.
+
+### 2. CI Runner Python Version Mismatch & Fix
+During the first GitHub Actions run, `pip install -r requirements.txt` failed while building `psycopg2-binary==2.9.9` from source:
+```text
+psycopg/utils.c:397:12: error: implicit declaration of function ‘_PyInterpreterState_Get’
+ERROR: Failed building wheel for psycopg2-binary
+```
+- **Root Cause:** The `ubuntu-latest` runner defaulted to Python 3.14, for which `psycopg2-binary==2.9.9` has no pre-built wheel and fails to compile.
+- **Resolution:** Added `actions/setup-python@v5` pinned to Python `3.12` in `.github/workflows/ci-cd.yml` to match the `python:3.12-slim` Docker runtime.
