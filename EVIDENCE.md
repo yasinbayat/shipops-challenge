@@ -333,3 +333,31 @@ prometheus-78584686d6-8rw82   1/1     Running   0          29s
 - `8b2f711` — `Reapply "chore(gitops): update image tag to 7556485 [skip ci]"` (roll-forward to `7556485`)
 - `e5fb00a` — `chore(k8s): add PDB, harden Prometheus manifests, and add bootstrap script`
 - `08d9754` — `docs(evidence): record roll-forward, PDB, hardened Prometheus, and bootstrap script`
+
+---
+
+## Final Live Cluster Acceptance Check
+
+Commands:
+```bash
+kubectl get applications -n argocd
+kubectl get pdb,pods -n shipops
+kubectl get pods -n monitoring
+```
+
+Verified output:
+```text
+NAME          SYNC STATUS   HEALTH STATUS
+shipops-api   Synced        Healthy
+
+NAME                                         MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+poddisruptionbudget.policy/shipops-api-pdb   1               N/A               1                     4m8s
+
+NAME                              READY   STATUS    RESTARTS   AGE
+pod/postgres-57c8f85b7-p9mt2      1/1     Running   0          94m
+pod/shipops-api-d7789b9b5-rkbbw   1/1     Running   0          4m8s
+pod/shipops-api-d7789b9b5-tlr82   1/1     Running   0          3m58s
+
+NAME                          READY   STATUS    RESTARTS   AGE
+prometheus-78584686d6-8rw82   1/1     Running   0          4m34s
+```
