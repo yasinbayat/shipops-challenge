@@ -131,3 +131,61 @@ To eliminate host Python version drift completely, the workflow was updated to b
   - Update Helm `values.yaml` & commit/push with `[skip ci]`: Passed (2s)
 - **Published GHCR Image:** `ghcr.io/yasinbayat/shipops-api:7556485`
 - **Automated GitOps Commit:** `f616c7c chore(gitops): update image tag to 7556485 [skip ci]`
+
+### 4. Argo CD Installation Troubleshooting & GitOps Sync
+
+1. **CRD Annotation Size Limit Error:**
+   - **Error:** Initial `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml` failed with:
+     `The CustomResourceDefinition "applicationsets.argoproj.io" is invalid: metadata.annotations: Too long: must have at most 262144 bytes`
+   - **Resolution:** Re-applied the manifest using Server-Side Apply (`kubectl apply --server-side --force-conflicts`).
+
+2. **Argo CD `ErrImagePull` / `ImagePullBackOff` Behind Host Proxy:**
+   - **Error:** All 7 Argo CD pods stalled in `ErrImagePull` / `Init:ErrImagePull` because `containerd` inside the `kind` node could not pull images through the WSL2 host proxy.
+   - **Resolution:** Extracted all container and initContainer images (`ghcr.io/dexidp/dex:v2.46.0`, `public.ecr.aws/docker/library/redis:8.10.1-alpine`, `quay.io/argoproj/argocd:v3.6.2`), pulled them via the WSL2 Docker daemon, and loaded them into the `kind` cluster using `kind load docker-image`.
+
+3. **Persisting `ImagePullBackOff` Due to `imagePullPolicy: Always` & StatefulSet Retention:**
+   - **Error:** Even after pre-loading all 3 images into `kind` and recreating pods, Argo CD pods continued failing with `ImagePullBackOff` because the upstream manifest hardcodes `imagePullPolicy: Always`. After patching, `argocd-application-controller-0` (a `StatefulSet` pod) still persisted in `ImagePullBackOff`.
+   - **Resolution:** Patched `imagePullPolicy: Always` to `imagePullPolicy: IfNotPresent` across the Argo CD manifest via `sed` + server-side apply, then explicitly deleted `argocd-application-controller-0` so the StatefulSet recreated it with the updated pull policy.
+
+4. **GHCR Image Pre-Load for GitOps Helm Rollout:**
+   - **Action:** Pulled the CI-built immutable image `ghcr.io/yasinbayat/shipops-api:7556485` on the host and loaded it into `kind` (`kind load docker-image`) so Argo CD's automated Helm sync could roll out the new pods without hitting the proxy.
+
+5. **Verified Argo CD Pods, Application Sync & Workload Rollout:**
+
+Command:
+```bash
+kubectl get pods -n argocd
+```
+Verified output:
+```text
+NAME                                               READY   STATUS    RESTARTS   AGE
+argocd-application-controller-0                    1/1     Running   0          2m50s
+argocd-applicationset-controller-ddf74f76f-rccbh   1/1     Running   0          3m58s
+argocd-dex-server-689f75b6f9-sc9fz                 1/1     Running   0          3m58s
+argocd-notifications-controller-7f9cf495bd-5qlpj   1/1     Running   0          3m57s
+argocd-redis-fb76454d5-hjnwz                       1/1     Running   0          3m58s
+argocd-repo-server-6fbb479667-54c8b                1/1     Running   0          3m58s
+argocd-server-7c9bddf6f5-zwqcf                     1/1     Running   0          3m58s
+```
+
+Command:
+```bash
+kubectl get applications -n argocd
+```
+Verified output:
+```text
+NAME          SYNC STATUS   HEALTH STATUS
+shipops-api   Synced        Healthy
+```
+
+Command:
+```bash
+kubectl get pods -n shipops
+```
+Verified output:
+```text
+NAME                          READY   STATUS    RESTARTS   AGE
+postgres-57c8f85b7-p9mt2      1/1     Running   0          52m
+shipops-api-d7789b9b5-2glrq   1/1     Running   0          23s
+shipops-api-d7789b9b5-ptw25   1/1     Running   0          17s
+```
