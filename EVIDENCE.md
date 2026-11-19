@@ -361,3 +361,13 @@ pod/shipops-api-d7789b9b5-tlr82   1/1     Running   0          3m58s
 NAME                          READY   STATUS    RESTARTS   AGE
 prometheus-78584686d6-8rw82   1/1     Running   0          4m34s
 ```
+
+### Non-Root Application Security Verification
+Verified that `shipops-api` runs as non-root user `appuser` (UID `10001`, defined in `app/Dockerfile`):
+```bash
+kubectl exec -n shipops shipops-api-d7789b9b5-rkbbw -- id
+```
+Verified output:
+```text
+uid=10001(appuser) gid=10001(appuser) groups=10001(appuser)
+```
